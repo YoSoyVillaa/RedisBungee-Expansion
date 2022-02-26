@@ -2,8 +2,6 @@ package com.helpchat.redisbungeeexpansion;
 
 import com.google.common.io.ByteArrayDataOutput;
 import com.google.common.io.ByteStreams;
-import me.clip.placeholderapi.PlaceholderAPI;
-import me.clip.placeholderapi.PlaceholderAPIPlugin;
 import me.clip.placeholderapi.expansion.Cacheable;
 import me.clip.placeholderapi.expansion.Configurable;
 import me.clip.placeholderapi.expansion.PlaceholderExpansion;
@@ -30,16 +28,14 @@ public final class RedisBungeeExpansion extends PlaceholderExpansion implements 
 
     private BukkitTask task;
 
-    private final String CHANNEL = "legacy:redisbungee";
-
     private int fetchInterval = 60;
 
     private boolean registered = false;
 
     public RedisBungeeExpansion() {
         if (!registered) {
-            Bukkit.getMessenger().registerOutgoingPluginChannel(getPlaceholderAPI(), CHANNEL);
-            Bukkit.getMessenger().registerIncomingPluginChannel(getPlaceholderAPI(), CHANNEL, this);
+            Bukkit.getMessenger().registerOutgoingPluginChannel(getPlaceholderAPI(), "redisbungee:toproxy");
+            Bukkit.getMessenger().registerIncomingPluginChannel(getPlaceholderAPI(), "redisbungee:tospigot", this);
             registered = true;
         }
     }
@@ -99,9 +95,11 @@ public final class RedisBungeeExpansion extends PlaceholderExpansion implements 
 
             out.writeUTF(server);
 
-            Bukkit.getOnlinePlayers().iterator().next().sendPluginMessage(getPlaceholderAPI(), CHANNEL, out.toByteArray());
+            Bukkit.getServer().sendPluginMessage(getPlaceholderAPI(), "redisbungee:toproxy", out.toByteArray());
+            //Bukkit.getOnlinePlayers().iterator().next().sendPluginMessage(getPlaceholderAPI(), CHANNEL, out.toByteArray());
 
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -159,7 +157,8 @@ public final class RedisBungeeExpansion extends PlaceholderExpansion implements 
         if (task != null) {
             try {
                 task.cancel();
-            } catch (Exception ex) {
+            } catch (Exception e) {
+                e.printStackTrace();
             }
             task = null;
         }
@@ -169,8 +168,8 @@ public final class RedisBungeeExpansion extends PlaceholderExpansion implements 
     public void clear() {
         servers.clear();
         if (registered) {
-            Bukkit.getMessenger().unregisterOutgoingPluginChannel(getPlaceholderAPI(), CHANNEL);
-            Bukkit.getMessenger().unregisterIncomingPluginChannel(getPlaceholderAPI(), CHANNEL, this);
+            Bukkit.getMessenger().unregisterOutgoingPluginChannel(getPlaceholderAPI(), "redisbungee:toproxy");
+            Bukkit.getMessenger().unregisterIncomingPluginChannel(getPlaceholderAPI(), "redisbungee:tospigot", this);
             registered = false;
         }
     }
@@ -178,49 +177,48 @@ public final class RedisBungeeExpansion extends PlaceholderExpansion implements 
     @Override
     public void onPluginMessageReceived(String channel, Player player, byte[] message) {
 
-        if (!channel.equals(CHANNEL)) {
-            return;
-        }
+        if (channel.equals("redisbungee:tospigot")) {
+            DataInputStream in = new DataInputStream(new ByteArrayInputStream(message));
 
-        DataInputStream in = new DataInputStream(new ByteArrayInputStream(message));
+            try {
 
-        try {
+                String subChannel = in.readUTF();
 
-            String subChannel = in.readUTF();
+                if (subChannel.equals("PlayerCount")) {
 
-            if (subChannel.equals("PlayerCount")) {
+                    String server = in.readUTF();
 
-                String server = in.readUTF();
+                    if (in.available() > 0) {
 
-                if (in.available() > 0) {
+                        int count = in.readInt();
 
-                    int count = in.readInt();
+                        if (server.equals("ALL")) {
+                            total = count;
+                        } else {
+                            servers.put(server, count);
+                        }
+                    }
 
-                    if (server.equals("ALL")) {
-                        total = count;
-                    } else {
-                        servers.put(server, count);
+
+                } else if (subChannel.equals("GetServers")) {
+
+                    String[] serverList = in.readUTF().split(", ");
+
+                    if (serverList.length == 0) {
+                        return;
+                    }
+
+                    for (String server : serverList) {
+
+                        if (!servers.containsKey(server)) {
+                            servers.put(server, 0);
+                        }
                     }
                 }
 
-
-            } else if (subChannel.equals("GetServers")) {
-
-                String[] serverList = in.readUTF().split(", ");
-
-                if (serverList.length == 0) {
-                    return;
-                }
-
-                for (String server : serverList) {
-
-                    if (!servers.containsKey(server)) {
-                        servers.put(server, 0);
-                    }
-                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
-
-        } catch (Exception e) {
         }
     }
 }
