@@ -65,7 +65,7 @@ public final class RedisBungeeExpansion extends PlaceholderExpansion implements 
 
     @Override
     public String getAuthor() {
-        return "clip";
+        return "clip, YoSoyVillaa";
     }
 
     @Override
